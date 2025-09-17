@@ -1,0 +1,70 @@
+{{- range $dbType, $db := .Values.databases }}
+{{- if $db.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "database-backup.fullname" $ }}-{{ $dbType }}
+  labels:
+    {{- include "database-backup.labels" $ | nindent 4 }}
+    database-type: {{ $dbType }}
+spec:
+  schedule: {{ $db.schedule | quote }}
+  concurrencyPolicy: {{ $.Values.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ $.Values.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $.Values.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ include "database-backup.serviceAccountName" $ }}
+          containers:
+          - name: backup
+            image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+            imagePullPolicy: {{ $.Values.image.pullPolicy }}
+            command: 
+              - "sh"
+              - "-c"
+              - "/scripts/{{ $dbType }}-backup.sh | tee -a /logs/{{ $dbType }}/{{ $dbType }}_backup_$(date +%F).log;"
+            env:
+              - name: BUCKET_NAME
+                value: {{ $db.bucketName | quote }}
+              - name: COS_APIKEY
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "database-backup.fullname" $ }}-secret
+                    key: COS_APIKEY
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups/{{ $dbType }}
+              subPath: backups/{{ $dbType }}
+            - name: backup-storage
+              mountPath: /logs/{{ $dbType }}
+              subPath: logs/{{ $dbType }}
+            - name: backup-configs
+              mountPath: /configs
+            - name: backup-scripts
+              mountPath: /scripts
+              readOnly: true
+            resources:
+              {{- toYaml $.Values.resources | nindent 14 }}
+          securityContext:
+            runAsUser: 0
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: {{ include "database-backup.fullname" $ }}-{{ $dbType }}-storage
+          - name: backup-configs
+            configMap:
+              name: {{ include "database-backup.fullname" $ }}-configs
+          - name: backup-scripts
+            configMap:
+              name: {{ include "database-backup.fullname" $ }}-scripts
+              defaultMode: 0755
+          restartPolicy: OnFailure
+          {{- with $.Values.image.pullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 10 }}
+          {{- end }}
+{{- end }}
+{{- end }}

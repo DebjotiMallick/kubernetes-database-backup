@@ -1,0 +1,95 @@
+mongodb: 
+  - hostname: iap-aachat-uat-mdb001-1363-mongodb
+    namespace: iap-aachat-uat
+  - hostname: iap-ccaaplus-uat-mdb001-mongodb-1363
+    namespace: iap-aaplus-cc-uat
+  - hostname: iap-aaplus-uat-mdb001-1363-mongodb
+    namespace: iap-aaplus-uat
+  - hostname: iap-ao-uat-mdb002-1363-mongodb
+    namespace: iap-ao-uat
+  - hostname: iap-aql-uat-mdb001-1363-mongodb
+    namespace: iap-aql-uat
+  - hostname: iap-bluebuddy-uat-mdb001-1363-mongodb
+    namespace: iap-bluebuddy-uat
+  - hostname: iap-cc-uat-mdb001-1363-mongodb
+    namespace: iap-cc-uat
+  - hostname: iap-cm-uat-mdb001-1363-mongodb
+    namespace: iap-cm-uat
+  - hostname: ocp-core-uat-mdb002-mongodb
+    namespace: iap-core-uat
+  - hostname: ocp-core-uat-mdb003-mongodb
+    namespace: iap-core-uat
+  - hostname: iap-dl-uat-mdb001-1363-mongodb
+    namespace: iap-dl-uat
+  - hostname: iap-dma-uat-mdb001-1363-mongodb
+    namespace: iap-dma-uat
+  - hostname: dw-dpmo-uat-mdb001-1363-mongodb
+    namespace: iap-dpmo-uat
+  - hostname: iap-dw-uat-mdb001-1363-mongodb
+    namespace: iap-dw-uat
+  - hostname: iap-edm-uat-mdb001-1363-mongodb
+    namespace: iap-edm-uat
+  - hostname: im-uat-mdb001-1363-mongodb
+    namespace: iap-im-uat
+  - hostname: iap-procmon-uat-mdb001-1363-mongodb
+    namespace: iap-procmon-uat
+  - hostname: iap-uat-mdb001-1363-mongodb
+    namespace: iap-sapadm-uat
+  - hostname: iap-sf-uat-mdb001-1363-mongodb
+    namespace: iap-sf-uat
+  - hostname: sot-uat-mdb001-1363-mongodb
+    namespace: iap-sot-uat
+  - hostname: iap-ta-uat-mdb001-1363-mongodb
+    namespace: iap-ta-uat
+  - hostname: iap-ttc-uat-ssl-mdb001-1363-mongodb
+    namespace: iap-talktocorpus-uat
+    tls: 
+      enabled: true
+      cert_dir: /certs
+  - hostname: iap-ua-uat-mdb001-1363-mongodb
+    namespace: iap-ua-uat
+  - hostname: iap-uachat-uat-mdb001-1363-mongodb
+    namespace: iap-uachat-uat
+  - hostname: iap-uat-mdb001-1363-mongodb
+    namespace: iap-uat
+mysql:
+  - hostname: iap-adapter-mysql001-982
+    namespace: iap-adapter-uat
+  - hostname: iap-uat-mysql001-982
+    namespace: iap-aql-uat
+  - hostname: iap-cc-uat-mysql001-982
+    namespace: iap-cc-uat
+  - hostname: iap-cybersecurity-uat-mysql002-982
+    namespace: iap-cybersecurity-uat
+  - hostname: iap-dma-uat-mysql001-982
+    namespace: iap-dma-uat
+  - hostname: dw-dpmo-uat-mysql001-982
+    namespace: iap-dpmo-uat
+  - hostname: iap-po-uat-mysql002-982
+    namespace: iap-po-uat
+  - hostname: sot-uat-mysql001-982
+    namespace: iap-sot-uat
+  - hostname: iap-ta-uat-mysql001-982
+    namespace: iap-ta-uat
+  - hostname: iap-ua-uat-mysql001-982
+    namespace: iap-ua-uat
+  - hostname: iap-uat-mysql001-982
+    namespace: iap-uat
+postgresql:
+  - hostname: iap-postgres-uat-ssl-postgresql
+    namespace: iap-talktocorpus-uat
+  - hostname: postgresql-dwcommon-uat
+    namespace: iap-dwcommon-uat
+  - hostname: jbpm-pgsql-1243-postgresql
+    namespace: iap-jbpm-uat
+mariadb:
+  - hostname: iap-drupal-uat-mariadb002
+    namespace: iap-drupal-uat
+milvus:
+  - hostname: iap-milvus-ssl-uat-4128
+    namespace: iap-milvus-uat
+    tls:
+      enabled: true
+      cert_dir: /milvus/configs/cert/milvus-cert
+      ca_file: uatmilvus.crt
+  

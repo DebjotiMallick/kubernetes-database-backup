@@ -1,0 +1,91 @@
+mongodb:
+  - hostname: aa-iaw-mdb001-1363-mongodb
+    namespace: aa-iaw-dev
+  - hostname: mongodb
+    namespace: aiops-core-data
+  - hostname: cc-dev-mdb003-1363-mongodb
+    namespace: corpus-curator-dev
+  - hostname: dw-bluebuddy-mdb001-1363-mongodb
+    namespace: dw-bluebuddy-dev
+  - hostname: dw-dev-mongodb001-1363
+    namespace: dw-dev
+  - hostname: dw-dpmo-dev-mdb001-1363-mongodb
+    namespace: dw-dpmo-dev
+  - hostname: dw-sapadmin-dev-mdb001-1363-mongodb
+    namespace: dw-sapadmin-dev
+  - hostname: dw-sf-dev-mongodb001-1363
+    namespace: dw-sf-dev
+  - hostname: iaw-mdb001-mongodb-1363
+    namespace: iaw-dev
+  - hostname: sot-dev-mdb001-mongodb-1363
+    namespace: sot-dev
+  - hostname: ocp-core-dev-mdb002-mongodb
+    namespace: iap-core-dev
+  - hostname: talktocorpus-mongodb001-tls-1363
+    namespace: talktocorpus
+    tls: 
+      enabled: true
+      cert_dir: /certs
+  - hostname: roks-core-dev-mdb001-mongodb
+    namespace: roks-core-dev
+mysql:
+  - hostname: aa-cc-mysql001-982
+    namespace: aa-corpus-curator-dev
+  - hostname: aa-iaw-mysql001-982
+    namespace: aa-iaw-dev
+  - hostname: cc-dev-mysql001-982
+    namespace: corpus-curator-dev
+  - hostname: cybersecurity-mysql002-982
+    namespace: cybersecurity-dev
+  - hostname: dw-dev-mysql001-982
+    namespace: dw-dev
+  - hostname: dw-dev-mysql002-982
+    namespace: dw-dev
+  - hostname: dw-dev-mysql004-982
+    namespace: dw-dev
+  - hostname: dw-dpmo-dev-mysql001-982
+    namespace: dw-dpmo-dev
+  - hostname: iaw-mysql001-982
+    namespace: iaw-dev
+  - hostname: sot-dev-mysql001-982
+    namespace: sot-dev
+postgresql:
+  - hostname: postgresql
+    namespace: aiops-core-data
+  - hostname: keycloak-postgresql
+    namespace: aiops-core-nfr
+  - hostname: airflow-postgresql
+    namespace: airflow-dev
+  - hostname: artifactory-postgresql
+    namespace: artifactory
+  - hostname: postgresql-corpus-curator-dev
+    namespace: corpus-curator-dev
+  - hostname: pgsql-postgresql
+    namespace: cybersecurity-dev
+  - hostname: iap-postgres-dev-postgresql
+    namespace: iap-pgbouncer-dev
+  - hostname: iaw-pgsql-1243-postgresql
+    namespace: iaw-dev
+  - hostname: jbpm-pgsql-1243-postgresql
+    namespace: jbpm-dev
+  - hostname: pgsql-postgresql
+    namespace: talktocorpus
+  - hostname: pgsql-postgresql
+    namespace: talktocorpus-async-dev
+mariadb:
+  - hostname: dw-drupal-dev-mariadb001
+    namespace: dw-drupal-dev
+milvus:
+  - hostname: milvus
+    namespace: aiops-core-data
+    tls:
+      enabled: true
+      cert_dir: /milvus/configs/cert/milvus-cert
+      ca_file: ca.crt
+  - hostname: milvus-dev-4128
+    namespace: milvus-dev
+    tls:
+      enabled: true
+      cert_dir: /milvus/configs/cert/milvus-cert
+      ca_file: devmilvus.pem
+  
