@@ -12,8 +12,8 @@ jobs:
 
     # add env for image name and tag
     env:
-      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/k8s-database-backup
-      IMAGE_TAG: ${{ github.run_id }}
+      IMAGE_NAME: ghcr.io/${{ toLower(github.repository_owner) }}/k8s-database-backup
+      IMAGE_TAG: ${{ toLower(github.run_id) }}
 
     steps:
       - uses: actions/checkout@v4
