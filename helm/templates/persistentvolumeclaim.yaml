@@ -1,12 +1,12 @@
-{{- range $dbType, $db := .Values.databases }}
-{{- if $db.enabled }}
+{{- range $dbType, $dbDetail := $.Values }}
+{{- if and (kindIs "map" $dbDetail) (hasKey $dbDetail "enabled") ($dbDetail.enabled) }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "database-backup.fullname" $ }}-{{ $dbType }}-storage
+  name: {{ include "kubernetes-database-backup.fullname" $ }}-{{ $dbType }}-storage
   labels:
-    {{- include "database-backup.labels" $ | nindent 4 }}
+    {{- include "kubernetes-database-backup.labels" $ | nindent 4 }}
     database-type: {{ $dbType }}
 spec:
   accessModes:

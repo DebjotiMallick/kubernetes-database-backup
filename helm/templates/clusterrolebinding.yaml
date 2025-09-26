@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "kubernetes-database-backup.fullname" . }}-cluster-rolebinding
+  labels:
+    {{- include "kubernetes-database-backup.labels" . | nindent 4 }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "kubernetes-database-backup.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "kubernetes-database-backup.fullname" . }}-cluster-role
+  apiGroup: rbac.authorization.k8s.io

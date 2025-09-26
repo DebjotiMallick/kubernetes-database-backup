@@ -7,8 +7,13 @@ COPY ./scripts/ /scripts/
 # Install core dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl wget \
-    mysql-client postgresql-client bc jq yq \
+    mysql-client postgresql-client unzip bc jq yq \
     && rm -rf /var/lib/apt/lists/*  
+
+# Install AWS CLI
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+RUN unzip awscliv2.zip
+RUN ./aws/install
 
 # Install kubectl
 RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"

@@ -1,15 +1,15 @@
-{{- range $dbType, $db := .Values.databases }}
-{{- if $db.enabled }}
+{{- range $dbType, $dbDetail := $.Values }}
+{{- if and (kindIs "map" $dbDetail) (hasKey $dbDetail "enabled") ($dbDetail.enabled) }}
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "database-backup.fullname" $ }}-{{ $dbType }}
+  name: {{ include "kubernetes-database-backup.fullname" $ }}-{{ $dbType }}
   labels:
-    {{- include "database-backup.labels" $ | nindent 4 }}
+    {{- include "kubernetes-database-backup.labels" $ | nindent 4 }}
     database-type: {{ $dbType }}
 spec:
-  schedule: {{ $db.schedule | quote }}
+  schedule: {{ $dbDetail.schedule | quote }}
   concurrencyPolicy: {{ $.Values.concurrencyPolicy }}
   successfulJobsHistoryLimit: {{ $.Values.successfulJobsHistoryLimit }}
   failedJobsHistoryLimit: {{ $.Values.failedJobsHistoryLimit }}
@@ -17,7 +17,7 @@ spec:
     spec:
       template:
         spec:
-          serviceAccountName: {{ include "database-backup.serviceAccountName" $ }}
+          serviceAccountName: {{ include "kubernetes-database-backup.serviceAccountName" $ }}
           containers:
           - name: backup
             image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
@@ -28,12 +28,22 @@ spec:
               - "/scripts/{{ $dbType }}-backup.sh | tee -a /logs/{{ $dbType }}/{{ $dbType }}_backup_$(date +%F).log;"
             env:
               - name: BUCKET_NAME
-                value: {{ $db.bucketName | quote }}
-              - name: COS_APIKEY
+                value: {{ $dbDetail.bucketName | quote }}
+              - name: S3_ENDPOINT
                 valueFrom:
                   secretKeyRef:
-                    name: {{ include "database-backup.fullname" $ }}-secret
-                    key: COS_APIKEY
+                    name: {{ include "kubernetes-database-backup.fullname" $ }}-secret
+                    key: S3_ENDPOINT
+              - name: AWS_ACCESS_KEY_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "kubernetes-database-backup.fullname" $ }}-secret
+                    key: AWS_ACCESS_KEY_ID
+              - name: AWS_SECRET_ACCESS_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "kubernetes-database-backup.fullname" $ }}-secret
+                    key: AWS_SECRET_ACCESS_KEY
             volumeMounts:
             - name: backup-storage
               mountPath: /backups/{{ $dbType }}
@@ -53,13 +63,13 @@ spec:
           volumes:
           - name: backup-storage
             persistentVolumeClaim:
-              claimName: {{ include "database-backup.fullname" $ }}-{{ $dbType }}-storage
+              claimName: {{ include "kubernetes-database-backup.fullname" $ }}-{{ $dbType }}-storage
           - name: backup-configs
             configMap:
-              name: {{ include "database-backup.fullname" $ }}-configs
+              name: {{ include "kubernetes-database-backup.fullname" $ }}-configs
           - name: backup-scripts
             configMap:
-              name: {{ include "database-backup.fullname" $ }}-scripts
+              name: {{ include "kubernetes-database-backup.fullname" $ }}-scripts
               defaultMode: 0755
           restartPolicy: OnFailure
           {{- with $.Values.image.pullSecrets }}
