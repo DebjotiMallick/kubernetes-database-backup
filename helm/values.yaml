@@ -59,8 +59,8 @@ rbac:
 
 # Image configuration
 image:
-  repository: "ghcr.io/debjotimallick/k8s-database-backup"
-  tag: "v0.0.2"
+  repository: "ghcr.io/debjotimallick/k8s-db-backup"
+  tag: "latest"
   pullPolicy: IfNotPresent
 
 # Job configuration
