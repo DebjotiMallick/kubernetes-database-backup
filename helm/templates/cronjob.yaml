@@ -53,8 +53,6 @@ spec:
               subPath: logs/{{ $dbType }}
             - name: backup-configs
               mountPath: /configs
-            - name: backup-scripts
-              mountPath: /scripts
               readOnly: true
             resources:
               {{- toYaml $.Values.resources | nindent 14 }}
@@ -67,10 +65,6 @@ spec:
           - name: backup-configs
             configMap:
               name: {{ include "kubernetes-database-backup.fullname" $ }}-configs
-          - name: backup-scripts
-            configMap:
-              name: {{ include "kubernetes-database-backup.fullname" $ }}-scripts
-              defaultMode: 0755
           restartPolicy: OnFailure
           {{- with $.Values.image.pullSecrets }}
           imagePullSecrets:

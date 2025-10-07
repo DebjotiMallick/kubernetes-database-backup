@@ -3,6 +3,7 @@ FROM ubuntu:24.04
 WORKDIR /scripts
 
 COPY ./scripts/ /scripts/
+RUN chmod +x /scripts/*
 
 # Install core dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
