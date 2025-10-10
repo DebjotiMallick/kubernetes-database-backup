@@ -59,7 +59,7 @@ rbac:
 
 # Image configuration
 image:
-  repository: "ghcr.io/debjotimallick/k8s-db-backup"
+  repository: "ghcr.io/debjotimallick/kubernetes-database-backup"
   tag: "latest"
   pullPolicy: IfNotPresent
 

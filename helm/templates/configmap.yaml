@@ -8,8 +8,9 @@ data:
   {{- range $dbType, $dbDetail := $.Values }}
   {{- if and (kindIs "map" $dbDetail) (hasKey $dbDetail "instances") }}
   {{ $dbType }}.yaml: |
+    {{ $dbType }}:
     {{- range $dbDetail.instances }}
-    - hostname: {{ .name }}
+    - hostname: {{ .hostname }}
       namespace: {{ .namespace }}
     {{- end }}
   {{- end }}
