@@ -1,131 +1,117 @@
 #!/bin/bash
+set -euo pipefail
 
-source /scripts/network-blocker.sh
-
-# Initialize success and failure counters
+# === CONFIGURATION ===
+DBTYPE="postgresql"
+BACKUP_BASE="/backups/${DBTYPE}"
+LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
 SUCCESS_COUNT=0
 FAILURE_COUNT=0
+CLEANUP_ON_EXIT=true
+BACKUP_FILE=""
 
-# Initialize dbtype
-DBTYPE="postgresql"
+# Ensure backup directory exists
+mkdir -p "$BACKUP_BASE"
 
-# Check if BUCKET_NAME environment variable is set
-BUCKET_NAME=$(printenv BUCKET_NAME)
-if [ -z "$BUCKET_NAME" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: BUCKET_NAME environment variable is not set"
+# === CLEANUP HANDLER ===
+trap 'if [ "${CLEANUP_ON_EXIT}" = true ] && [ -f "$BACKUP_FILE" ]; then rm -f "$BACKUP_FILE"; fi' EXIT
+
+# === VALIDATION ===
+required_envs=(BUCKET_NAME AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY S3_ENDPOINT)
+for var in "${required_envs[@]}"; do
+  if [ -z "${!var:-}" ]; then
+    echo "$LOG_PREFIX ERROR: $var environment variable is not set"
     exit 1
-fi
-
-COS_APIKEY=$(printenv COS_APIKEY)
-if [ -z "$COS_APIKEY" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: COS_APIKEY environment variable is not set"
-    exit 1
-else
-    ibmcloud login --apikey $COS_APIKEY -r "eu-de"  > /dev/null 2>&1
-fi
-
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚡ Initiating database backup process for PostgreSQL in $BUCKET_NAME bucket..."
-
-# Read YAML entries into an array
-readarray -t db_array < <(yq -r ".${DBTYPE}[] | @json" /configs/databases.yaml)
-
-# PostgreSQL-specific backup logic
-for db in "${db_array[@]}"; do
-    HOSTNAME=$(echo "$db" | jq -r '.hostname')
-    NAMESPACE=$(echo "$db" | jq -r '.namespace')
-    TLS_ENABLED=$(echo "$db" | jq -r '.tls? | .enabled // false')
-    CERT_DIR=$(echo "$db" | jq -r '.tls? | .cert_dir // ""')
-    
-    echo "===================================================================="
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 📢 Preparing database backup process for PostgreSQL in $NAMESPACE namespace on $HOSTNAME..."
-
-    # Generate backup filename
-    FILENAME="${HOSTNAME//-/_}_${NAMESPACE//-/_}_$(date +"%d_%m_%Y_%H%M%S")"
-
-    # Prepare the label selector
-    LABEL_SELECTOR=$(kubectl get svc "$HOSTNAME" -n "$NAMESPACE" -o jsonpath='{.spec.selector}' | jq -r 'to_entries | map("\(.key)=\(.value)") | join(",")')
-    if [ -z "$LABEL_SELECTOR" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ No selector found for service $HOSTNAME in namespace $NAMESPACE"
-        continue
-    fi
-
-    # Get the pod name using the selector
-    POD_NAME=$(kubectl get pods -n "$NAMESPACE" -l "$LABEL_SELECTOR" -o jsonpath="{.items[0].metadata.name}")
-    if [ -z "$POD_NAME" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ No pods found matching selector: $LABEL_SELECTOR"
-        continue
-    fi
-
-    # Get database credentials from the running pod environment variables
-    CONTAINER_NAME=$(kubectl get pod "$POD_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.containers[*].name}' | tr ' ' '\n' | grep -i ${DBTYPE})
-    export USER=postgres
-    export PASSWORD=$(kubectl exec -n "$NAMESPACE" "$POD_NAME" -c $CONTAINER_NAME -- printenv POSTGRES_POSTGRES_PASSWORD 2>/dev/null || echo "")
-    if [ -z "$PASSWORD" ]; then
-        PASSWORD=$(kubectl exec -n "$NAMESPACE" "$POD_NAME" -c $CONTAINER_NAME -- printenv POSTGRES_PASSWORD)
-    fi
-    if [[ -n "$USER" && -n "$PASSWORD" ]]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔑 PostgreSQL credentials retrieved successfully"
-    else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Missing PostgreSQL credentials, skipping this instance..."
-        ((FAILURE_COUNT++))
-        continue 
-    fi
-
-    # Block network traffic to the database
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🚫 Blocking network traffic to $HOSTNAME database in $NAMESPACE."
-    apply_network_policy $NAMESPACE $LABEL_SELECTOR > /dev/null 2>&1
-
-    # Backup PostgreSQL database
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 📦 Starting backup process..."
-    START_TIME=$(date +%s)
-	PGPASSWORD=$PASSWORD pg_dumpall -h $HOSTNAME.$NAMESPACE -U postgres | gzip > /backups/${DBTYPE}/$FILENAME.gz 
-    BACKUP_STATUS=$?
-    END_TIME=$(date +%s)
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🛜 Removing network blocker."
-    remove_network_policy $NAMESPACE > /dev/null 2>&1
-    gunzip -t "/backups/${DBTYPE}/$FILENAME.gz"
-    BACKUP_INTEGRITY=$?
-
-    # Check backup status
-    if [ $BACKUP_STATUS -eq 0 ] && [ $BACKUP_INTEGRITY -eq 0 ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ PostgreSQL backup completed successfully"
-        DURATION=$((END_TIME - START_TIME))
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏳ Backup duration: $DURATION seconds"
-        ((SUCCESS_COUNT++))
-
-        # Upload the backup to IBM COS
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🚀 Uploading backup to IBM Cloud Object Storage..."
-        ibmcloud cos upload --bucket $BUCKET_NAME --key $FILENAME.gz --file /backups/${DBTYPE}/$FILENAME.gz --output text --region eu-geo
-        UPLOAD_STATUS=$?
-        
-        if [ $UPLOAD_STATUS -eq 0 ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ☁️ Backup uploaded to IBM Cloud Object Storage successfully."
-        else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: Failed to upload backup to IBM Cloud Object Storage. Status code: $UPLOAD_STATUS. Error message: $(ibmcloud cos upload --bucket $BUCKET_NAME --key $FILENAME.gz --file /backups/${DBTYPE}/$FILENAME.gz --output text --region eu-geo)"
-        fi
-    else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: PostgreSQL backup failed for $HOSTNAME in $NAMESPACE namespace with status $BACKUP_STATUS. Please check the logs for more information."
-        ((FAILURE_COUNT++))
-    fi
-
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 💯 Backup process completed for $HOSTNAME."
+  fi
 done
 
-# Print final counts
-echo "┌─────────────────────────────────────────────────────┐"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🙆 Total Successful Backups: $SUCCESS_COUNT"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🙅 Total Failed Backups: $FAILURE_COUNT"
-echo "└─────────────────────────────────────────────────────┘"
+for bin in kubectl aws jq yq pg_dump pg_dumpall gzip; do
+  if ! command -v "$bin" >/dev/null 2>&1; then
+    echo "$LOG_PREFIX ERROR: Required binary '$bin' not found in PATH"
+    exit 1
+  fi
+done
 
-# Upload log files to IBM Cloud Object Storage
-ibmcloud cos upload --bucket $BUCKET_NAME --key ${DBTYPE}_backup_$(date +%F).log --file /logs/${DBTYPE}/${DBTYPE}_backup_$(date +%F).log --output text --region eu-geo
-UPLOAD_STATUS=$?
-if [ $UPLOAD_STATUS -eq 0 ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 📝 Logs uploaded to IBM Cloud Object Storage successfully."
-else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: Failed to upload log file to IBM Cloud Object Storage. Status code: $UPLOAD_STATUS. Error message: $(ibmcloud cos upload --bucket $BUCKET_NAME --key ${DBTYPE}_backup_$(date +%F).log --file /logs/${DBTYPE}/${DBTYPE}_backup_$(date +%F).log --output text --region eu-geo)"
+echo "$LOG_PREFIX Starting PostgreSQL backup process to bucket: $BUCKET_NAME"
+
+# === READ CONFIG ===
+CONFIG_PATH="/configs/${DBTYPE}.yaml"
+if [ ! -f "$CONFIG_PATH" ]; then
+  echo "$LOG_PREFIX ERROR: Config file not found at $CONFIG_PATH"
+  exit 1
 fi
 
-# Cleanup
-rm -rf /backups/${DBTYPE}/* 2>/dev/null
-rm -rf /logs/${DBTYPE}/* 2>/dev/null
+mapfile -t db_array < <(yq -r ".${DBTYPE}[] | @json" "$CONFIG_PATH")
+
+# === MAIN LOOP ===
+set +e  # allow loop to continue on failure
+for db in "${db_array[@]}"; do
+  HOSTNAME=$(echo "$db" | jq -r '.hostname')
+  NAMESPACE=$(echo "$db" | jq -r '.namespace')
+  DATABASE=$(echo "$db" | jq -r '.database // "postgres"')
+  PORT=$(echo "$db" | jq -r '.port // 5432')
+
+  echo "===================================================================="
+  echo "$LOG_PREFIX Processing PostgreSQL instance: $HOSTNAME (namespace: $NAMESPACE, db: $DATABASE)"
+
+  # === GET CREDENTIALS ===
+  USER=$(kubectl exec -n "$NAMESPACE" svc/"$HOSTNAME" -- printenv POSTGRES_USER 2>/dev/null || echo "postgres")
+  PASSWORD=$(kubectl exec -n "$NAMESPACE" svc/"$HOSTNAME" -- sh -c 'if [ -n "$POSTGRES_PASSWORD" ]; then echo "$POSTGRES_PASSWORD"; elif [ -n "$POSTGRES_PASSWORD_FILE" ]; then cat "$POSTGRES_PASSWORD_FILE"; fi' 2>/dev/null || true)
+
+  if [[ -z "$PASSWORD" ]]; then
+    echo "$LOG_PREFIX ERROR: Missing PostgreSQL credentials for $HOSTNAME in $NAMESPACE"
+    ((FAILURE_COUNT++))
+    continue
+  fi
+
+  # === BACKUP FILE ===
+  FILENAME="${HOSTNAME//-/_}_${NAMESPACE//-/_}_${DATABASE}_$(date +"%d_%m_%Y_%H%M%S").sql.gz"
+  BACKUP_FILE="${BACKUP_BASE}/${FILENAME}"
+  CLEANUP_ON_EXIT=true  # assume cleanup until success
+
+  echo "$LOG_PREFIX Running pg_dump for $DATABASE ..."
+  START_TIME=$(date +%s)
+  PGPASSWORD="$PASSWORD" pg_dump \
+    -h "${HOSTNAME}.${NAMESPACE}" \
+    -p "$PORT" \
+    -U "$USER" \
+    -d "$DATABASE" \
+    -F p \
+    | gzip > "$BACKUP_FILE"
+  DUMP_STATUS=$?
+
+  END_TIME=$(date +%s)
+  DURATION=$((END_TIME - START_TIME))
+
+  if [ $DUMP_STATUS -eq 0 ] && gunzip -t "$BACKUP_FILE" >/dev/null 2>&1; then
+    echo "$LOG_PREFIX Backup successful (duration: ${DURATION}s)"
+    CLEANUP_ON_EXIT=false  # Verified dump created, keep it
+
+    # === UPLOAD TO S3 ===
+    S3_PATH="s3://${BUCKET_NAME}/${S3_PREFIX:+$S3_PREFIX/}${FILENAME}"
+    echo "$LOG_PREFIX Uploading backup to $S3_PATH ..."
+    if aws --endpoint-url "https://${S3_ENDPOINT}" s3 cp "$BACKUP_FILE" "$S3_PATH" >/dev/null 2>&1; then
+      echo "$LOG_PREFIX Upload successful"
+      ((SUCCESS_COUNT++))
+    else
+      echo "$LOG_PREFIX WARNING: Upload failed for $HOSTNAME. Keeping local copy for recovery."
+      ((FAILURE_COUNT++))
+    fi
+  else
+    echo "$LOG_PREFIX ERROR: pg_dump failed for $HOSTNAME in $NAMESPACE"
+    ((FAILURE_COUNT++))
+    rm -f "$BACKUP_FILE"
+  fi
+done
+set -e  # restore strict mode
+
+# === RETENTION POLICY ===
+echo "$LOG_PREFIX Applying 7-day local retention policy..."
+find "$BACKUP_BASE" -type f -name "*.gz" -mtime +7 -delete
+echo "$LOG_PREFIX Retention cleanup complete."
+
+# === SUMMARY ===
+echo "┌─────────────────────────────────────────────────────┐"
+echo "$LOG_PREFIX Total Successful Backups: $SUCCESS_COUNT"
+echo "$LOG_PREFIX Total Failed Backups: $FAILURE_COUNT"
+echo "└─────────────────────────────────────────────────────┘"

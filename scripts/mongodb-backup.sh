@@ -44,12 +44,11 @@ fi
 mapfile -t db_array < <(yq -r ".${DBTYPE}[] | @json" "$CONFIG_PATH")
 
 # === MAIN LOOP ===
-set +e
+set +e  # allow loop to continue on failure
 for db in "${db_array[@]}"; do
   HOSTNAME=$(echo "$db" | jq -r '.hostname')
   NAMESPACE=$(echo "$db" | jq -r '.namespace')
   PORT=$(echo "$db" | jq -r '.port // 27017')
-  S3_PREFIX=$(echo "$db" | jq -r '.s3_prefix // ""')
 
   echo "===================================================================="
   echo "$LOG_PREFIX Processing MongoDB instance: $HOSTNAME (namespace: $NAMESPACE)"
@@ -64,51 +63,49 @@ for db in "${db_array[@]}"; do
     continue
   fi
 
-  # === BACKUP ===
+  # === BACKUP FILE ===
   FILENAME="${HOSTNAME//-/_}_${NAMESPACE//-/_}_$(date +"%d_%m_%Y_%H%M%S").gz"
   BACKUP_FILE="${BACKUP_BASE}/${FILENAME}"
   CLEANUP_ON_EXIT=true  # assume cleanup until success
 
   echo "$LOG_PREFIX Running mongodump..."
   START_TIME=$(date +%s)
-  if mongodump \
+  mongodump \
     --host "${HOSTNAME}.${NAMESPACE}" \
     --port "$PORT" \
     --username "$USER" \
     --password "$PASSWORD" \
     --authenticationDatabase admin \
     --gzip \
-    --archive="$BACKUP_FILE" >/dev/null 2>&1; then
+    --archive="$BACKUP_FILE" > /dev/null 2>&1
+    DUMP_STATUS=$?
 
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
-    echo "$LOG_PREFIX Backup successful (duration: ${DURATION}s)"
 
-    # === VERIFY BACKUP INTEGRITY ===
-    if gunzip -t "$BACKUP_FILE" 2>/dev/null; then
-      # === UPLOAD TO S3 ===
-      S3_PATH="s3://${BUCKET_NAME}/${S3_PREFIX:+$S3_PREFIX/}${FILENAME}"
-      echo "$LOG_PREFIX Uploading backup to $S3_PATH ..."
-      if aws --endpoint-url "https://${S3_ENDPOINT}" s3 cp "$BACKUP_FILE" "$S3_PATH" >/dev/null 2>&1; then
-        echo "$LOG_PREFIX Upload successful"
-        CLEANUP_ON_EXIT=false  # don't delete local backup
-        ((SUCCESS_COUNT++))
-      else
-        echo "$LOG_PREFIX ERROR: Upload failed for $HOSTNAME"
-        ((FAILURE_COUNT++))
-      fi
+  if [ $DUMP_STATUS -eq 0 ] && gunzip -t "$BACKUP_FILE" >/dev/null 2>&1; then
+    echo "$LOG_PREFIX Backup successful (duration: ${DURATION}s)"
+    CLEANUP_ON_EXIT=false  # Verified dump created, keep it
+
+    # === UPLOAD TO S3 ===
+    S3_PATH="s3://${BUCKET_NAME}/${S3_PREFIX:+$S3_PREFIX/}${FILENAME}"
+    echo "$LOG_PREFIX Uploading backup to $S3_PATH ..."
+    if aws --endpoint-url "https://${S3_ENDPOINT}" s3 cp "$BACKUP_FILE" "$S3_PATH" >/dev/null 2>&1; then
+      echo "$LOG_PREFIX Upload successful"
+      ((SUCCESS_COUNT++))
     else
-      echo "$LOG_PREFIX ERROR: Backup integrity check failed for $HOSTNAME"
+    echo "$LOG_PREFIX WARNING: Upload failed for $HOSTNAME. Keeping local copy for recovery."
       ((FAILURE_COUNT++))
     fi
   else
     echo "$LOG_PREFIX ERROR: mongodump failed for $HOSTNAME in $NAMESPACE"
     ((FAILURE_COUNT++))
+    rm -f "$BACKUP_FILE"
   fi
 done
-set -e
+set -e  # restore strict mode
 
-# === LOCAL RETENTION POLICY ===
+# === RETENTION POLICY ===
 echo "$LOG_PREFIX Applying 7-day local retention policy..."
 find "$BACKUP_BASE" -type f -name "*.gz" -mtime +7 -delete
 echo "$LOG_PREFIX Retention cleanup complete."

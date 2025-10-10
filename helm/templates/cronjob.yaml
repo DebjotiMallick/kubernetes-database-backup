@@ -25,7 +25,7 @@ spec:
             command: 
               - "sh"
               - "-c"
-              - "/scripts/{{ $dbType }}-backup.sh | tee -a /logs/{{ $dbType }}/{{ $dbType }}_backup_$(date +%F).log;"
+              - "/scripts/{{ $dbType }}-backup.sh"
             env:
               - name: BUCKET_NAME
                 value: {{ $dbDetail.bucketName | quote }}

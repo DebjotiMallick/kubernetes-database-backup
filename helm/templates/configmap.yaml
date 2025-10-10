@@ -6,12 +6,18 @@ metadata:
     {{- include "kubernetes-database-backup.labels" . | nindent 4 }}
 data:
   {{- range $dbType, $dbDetail := $.Values }}
-  {{- if and (kindIs "map" $dbDetail) (hasKey $dbDetail "instances") }}
+  {{- if and (kindIs "map" $dbDetail) ($dbDetail.enabled) (hasKey $dbDetail "instances") }}
   {{ $dbType }}.yaml: |
     {{ $dbType }}:
-    {{- range $dbDetail.instances }}
+    {{- range $instance := $dbDetail.instances }}
     - hostname: {{ .hostname }}
       namespace: {{ .namespace }}
+      {{- if hasKey $instance "port" }}
+      port: {{ $instance.port }}
+      {{- end }}
+      {{- if hasKey $instance "database" }}
+      database: {{ $instance.database }}
+      {{- end }}
     {{- end }}
   {{- end }}
   {{- end }}

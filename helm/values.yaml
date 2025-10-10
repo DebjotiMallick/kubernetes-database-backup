@@ -11,6 +11,10 @@ mongodb:
   bucketName: ""
   bucketRegion: ""
   instances: []
+  # instances:
+  #   - hostname: mongodb-1
+  #     namespace: namespace-1
+  #     port: 27017
 
 postgresql:
   enabled: false
@@ -18,6 +22,9 @@ postgresql:
   bucketName: ""
   bucketRegion: ""
   instances: []
+  # instances:
+  #   - name: postgresql-1
+  #     namespace: ns-1
 
 mysql:
   enabled: false
@@ -62,6 +69,7 @@ image:
   repository: "ghcr.io/debjotimallick/kubernetes-database-backup"
   tag: "latest"
   pullPolicy: IfNotPresent
+  pullSecrets: []
 
 # Job configuration
 concurrencyPolicy: Forbid
