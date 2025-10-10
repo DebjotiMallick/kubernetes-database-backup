@@ -1,24 +1,24 @@
 # Automated Database Backup System
 
-Automation DB Backup Engine, which takes periodical database dump and push it to COS repository buckets
+Automation Database Backup Engine, which takes periodical database dump and push it to COS repository buckets
 
 ## Releases:
-| Version | Features |
-| ------- | ------------------------------------------------ |
-| 3.3.2 | Updated mc client |
-| 3.3.1 | Updated kubectl version to latest (1.32) |
-| 3.3 | Major updates include ubuntu 24.04 base image, postgresql-client 16, milvus backup 0.5.2, COS update strategy change etc.|
-| 3.2 | Added telnet, ssh, netstat, ping commands |
-| 3.1 | Added UAT milvus certificate |
-| 3.0 | Minor fix |
-| 2.9 | Added IBM Root CA certificate |
-| 2.8 | Added MinIO client |
-| 2.7 | Added milvus backup tool |
-| 2.6 | Added bc & sendgrid for cert-renewal script |
-| 2.5 | Added weaviate-ts-client |
-| 2.4 | Updated nodejs version to 20.x |
-| 2.3 | Added postgresql client version 15 and oc client |
-| 2.2 | Updated mongodb org tools |
+| Version | Features                                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 3.3.2   | Updated mc client                                                                                                         |
+| 3.3.1   | Updated kubectl version to latest (1.32)                                                                                  |
+| 3.3     | Major updates include ubuntu 24.04 base image, postgresql-client 16, milvus backup 0.5.2, COS update strategy change etc. |
+| 3.2     | Added telnet, ssh, netstat, ping commands                                                                                 |
+| 3.1     | Added UAT milvus certificate                                                                                              |
+| 3.0     | Minor fix                                                                                                                 |
+| 2.9     | Added IBM Root CA certificate                                                                                             |
+| 2.8     | Added MinIO client                                                                                                        |
+| 2.7     | Added milvus backup tool                                                                                                  |
+| 2.6     | Added bc & sendgrid for cert-renewal script                                                                               |
+| 2.5     | Added weaviate-ts-client                                                                                                  |
+| 2.4     | Updated nodejs version to 20.x                                                                                            |
+| 2.3     | Added postgresql client version 15 and oc client                                                                          |
+| 2.2     | Updated mongodb org tools                                                                                                 |
 
 # Database Backup System
 
@@ -26,13 +26,13 @@ Automation DB Backup Engine, which takes periodical database dump and push it to
 This system automates the backup of multiple databases and stores them securely in designated object storage buckets. The backups are categorized based on the database type and environment (Dev, UAT, Prod).
 
 ## Backup Storage Mapping
-| Database  | Dev Backup Bucket               | UAT Backup Bucket               | Prod Backup Bucket               |
-|-----------|---------------------------------|---------------------------------|----------------------------------|
-| MongoDB   | `roks-dev-mongodbbackup`       | `roks-uat-mongodbbackup`       | `roks-prod-mongodbbackup`       |
-| PostgreSQL| `roks-dev-postgresbackup`      | `roks-uat-postgresbackup`      | `roks-prod-postgresbackup`      |
-| MySQL     | `roks-dev-mysqlbackup`         | `roks-uat-mysqlbackup`         | `roks-prod-mysqlbackup`         |
-| Milvus    | `roks-dev-milvusbackup`        | `roks-uat-milvusbackup`        | `roks-prod-milvusbackup`        |
-| MariaDB   | `roks-dev-mariadbbackup`       | `roks-uat-mariadbbackup`       | `roks-prod-mariadbbackup`       |
+| Database   | Dev Backup Bucket         | UAT Backup Bucket         | Prod Backup Bucket         |
+| ---------- | ------------------------- | ------------------------- | -------------------------- |
+| MongoDB    | `roks-dev-mongodbbackup`  | `roks-uat-mongodbbackup`  | `roks-prod-mongodbbackup`  |
+| PostgreSQL | `roks-dev-postgresbackup` | `roks-uat-postgresbackup` | `roks-prod-postgresbackup` |
+| MySQL      | `roks-dev-mysqlbackup`    | `roks-uat-mysqlbackup`    | `roks-prod-mysqlbackup`    |
+| Milvus     | `roks-dev-milvusbackup`   | `roks-uat-milvusbackup`   | `roks-prod-milvusbackup`   |
+| MariaDB    | `roks-dev-mariadbbackup`  | `roks-uat-mariadbbackup`  | `roks-prod-mariadbbackup`  |
 
 ## Features
 - Automated scheduled backups
