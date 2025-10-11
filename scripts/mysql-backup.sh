@@ -1,120 +1,117 @@
 #!/bin/bash
+set -euo pipefail
 
-source /scripts/network-blocker.sh
-
-# Initialize success and failure counters
+# === CONFIGURATION ===
+DBTYPE="mysql"
+BACKUP_BASE="/backups/${DBTYPE}"
+LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
 SUCCESS_COUNT=0
 FAILURE_COUNT=0
+CLEANUP_ON_EXIT=true
+BACKUP_FILE=""
 
-# Initialize dbtype
-DBTYPE="mysql"
+# Ensure backup directory exists
+mkdir -p "$BACKUP_BASE"
 
-# Check if BUCKET_NAME environment variable is set
-BUCKET_NAME=$(printenv BUCKET_NAME)
-if [ -z "$BUCKET_NAME" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: BUCKET_NAME environment variable is not set"
+# === CLEANUP HANDLER ===
+trap 'if [ "${CLEANUP_ON_EXIT}" = true ] && [ -f "$BACKUP_FILE" ]; then rm -f "$BACKUP_FILE"; fi' EXIT
+
+# === VALIDATION ===
+required_envs=(BUCKET_NAME AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY S3_ENDPOINT)
+for var in "${required_envs[@]}"; do
+  if [ -z "${!var:-}" ]; then
+    echo "$LOG_PREFIX ERROR: $var environment variable is not set"
+    exit 1
+  fi
+done
+
+for bin in kubectl aws jq yq mysqldump gzip; do
+  if ! command -v "$bin" >/dev/null 2>&1; then
+    echo "$LOG_PREFIX ERROR: Required binary '$bin' not found in PATH"
+    exit 1
+fi
+done
+
+echo "$LOG_PREFIX Starting MySQL backup process to bucket: $BUCKET_NAME"
+
+# === READ CONFIG ===
+CONFIG_PATH="/configs/${DBTYPE}.yaml"
+if [ ! -f "$CONFIG_PATH" ]; then
+  echo "$LOG_PREFIX ERROR: Config file not found at $CONFIG_PATH"
     exit 1
 fi
 
-COS_APIKEY=$(printenv COS_APIKEY)
-if [ -z "$COS_APIKEY" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: COS_APIKEY environment variable is not set"
-    exit 1
-else
-    ibmcloud login --apikey $COS_APIKEY -r "eu-de"  > /dev/null 2>&1
-fi
+mapfile -t db_array < <(yq -r ".${DBTYPE}[] | @json" "$CONFIG_PATH")
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚡ Initiating database backup process for MySQL in $BUCKET_NAME bucket..."
-
-# Read YAML entries into an array
-readarray -t db_array < <(yq -r ".${DBTYPE}[] | @json" /configs/databases.yaml)
-
-# MySQL-specific backup logic
+# === MAIN LOOP ===
+set +e  # allow loop to continue on failure
 for db in "${db_array[@]}"; do
-    HOSTNAME=$(echo "$db" | jq -r '.hostname')
-    NAMESPACE=$(echo "$db" | jq -r '.namespace')
+  HOSTNAME=$(echo "$db" | jq -r '.hostname')
+  NAMESPACE=$(echo "$db" | jq -r '.namespace')
+  DATABASE=$(echo "$db" | jq -r '.database // "mysql"')
+  PORT=$(echo "$db" | jq -r '.port // 3306')
     
-    echo "===================================================================="
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 📢 Preparing database backup process for MySQL in $NAMESPACE namespace on $HOSTNAME..."
+  echo "===================================================================="
+  echo "$LOG_PREFIX Processing MySQL instance: $HOSTNAME (namespace: $NAMESPACE, db: $DATABASE)"
 
-    # Generate backup filename
-    FILENAME="${HOSTNAME//-/_}_${NAMESPACE//-/_}_$(date +"%d_%m_%Y_%H%M%S")"
+  # === GET CREDENTIALS ===
+  USER=$(kubectl exec -n "$NAMESPACE" svc/"$HOSTNAME" -- printenv MYSQL_USER 2>/dev/null || echo "root")
+  PASSWORD=$(kubectl get secret -n $NAMESPACE ${HOSTNAME} -o jsonpath="{.data.mysql-root-password}" 2>/dev/null | base64 -d)
 
-    # Prepare the label selector
-    LABEL_SELECTOR=$(kubectl get svc "$HOSTNAME" -n "$NAMESPACE" -o jsonpath='{.spec.selector}' | jq -r 'to_entries | map("\(.key)=\(.value)") | join(",")')
-    if [ -z "$LABEL_SELECTOR" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ No selector found for service $HOSTNAME in namespace $NAMESPACE"
-        continue
-    fi
-
-    # Get the pod name using the selector
-    POD_NAME=$(kubectl get pods -n "$NAMESPACE" -l "$LABEL_SELECTOR" -o jsonpath="{.items[0].metadata.name}")
-    if [ -z "$POD_NAME" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ No pods found matching selector: $LABEL_SELECTOR"
-        continue
-    fi
-
-    # Get database credentials from the running pod environment variables
-    CONTAINER_NAME=$(kubectl get pod "$POD_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.containers[*].name}' | tr ' ' '\n' | grep -i ${DBTYPE})
-    export USER=root
-    export PASSWORD=$(kubectl exec -n "$NAMESPACE" "$POD_NAME" -c $CONTAINER_NAME -- printenv MYSQL_ROOT_PASSWORD 2>/dev/null || echo "")
-    if [[ -n "$USER" && -n "$PASSWORD" ]]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔑 MySQL credentials retrieved successfully"
-    else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Missing MySQL credentials, skipping this instance..."
+  if [[ -z "$PASSWORD" ]]; then
+    echo "$LOG_PREFIX ERROR: Missing MySQL credentials for $HOSTNAME in $NAMESPACE"
         ((FAILURE_COUNT++))
         continue 
     fi
 
-    # Backup MySQL database
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 📦 Starting backup process..."
+  # === BACKUP FILE ===
+  FILENAME="${HOSTNAME//-/_}_${NAMESPACE//-/_}_${DATABASE}_$(date +"%d_%m_%Y_%H%M%S").sql.gz"
+  BACKUP_FILE="${BACKUP_BASE}/${FILENAME}"
+  CLEANUP_ON_EXIT=true  # assume cleanup until success
+
+  echo "$LOG_PREFIX Running mysqldump for $DATABASE ..."
     START_TIME=$(date +%s)
-    mysqldump -u $USER -p$PASSWORD -h $HOSTNAME.$NAMESPACE --single-transaction --quick --all-databases | gzip > /backups/${DBTYPE}/$FILENAME.gz
-    BACKUP_STATUS=$?
+  mysqldump \
+    -h "${HOSTNAME}.${NAMESPACE}" \
+    -P "$PORT" \
+    -u "$USER" \
+    -p"$PASSWORD" \
+    "$DATABASE" \
+    | gzip > "$BACKUP_FILE"
+  DUMP_STATUS=$?
+
     END_TIME=$(date +%s)
-    gunzip -t "/backups/${DBTYPE}/$FILENAME.gz"
-    BACKUP_INTEGRITY=$?
-
-    # Check backup status
-    if [ $BACKUP_STATUS -eq 0 ] && [ $BACKUP_INTEGRITY -eq 0 ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ MySQL backup completed successfully"
         DURATION=$((END_TIME - START_TIME))
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏳ Backup duration: $DURATION seconds"
-        ((SUCCESS_COUNT++))
 
-        # Upload the backup to IBM COS
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🚀 Uploading backup to IBM Cloud Object Storage..."
-        ibmcloud cos upload --bucket $BUCKET_NAME --key $FILENAME.gz --file /backups/${DBTYPE}/$FILENAME.gz --output text --region eu-geo
-        UPLOAD_STATUS=$?
-        
-        if [ $UPLOAD_STATUS -eq 0 ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ☁️ Backup uploaded to IBM Cloud Object Storage successfully."
-        else
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: Failed to upload backup to IBM Cloud Object Storage. Status code: $UPLOAD_STATUS. Error message: $(ibmcloud cos upload --bucket $BUCKET_NAME --key $FILENAME.gz --file /backups/${DBTYPE}/$FILENAME.gz --output text --region eu-geo)"
-        fi
+  if [ $DUMP_STATUS -eq 0 ] && gunzip -t "$BACKUP_FILE" >/dev/null 2>&1; then
+    echo "$LOG_PREFIX Backup successful (duration: ${DURATION}s)"
+    CLEANUP_ON_EXIT=false  # Verified dump created, keep it
+
+    # === UPLOAD TO S3 ===
+    S3_PATH="s3://${BUCKET_NAME}/${S3_PREFIX:+$S3_PREFIX/}${FILENAME}"
+    echo "$LOG_PREFIX Uploading backup to $S3_PATH ..."
+    if aws --endpoint-url "https://${S3_ENDPOINT}" s3 cp "$BACKUP_FILE" "$S3_PATH" >/dev/null 2>&1; then
+      echo "$LOG_PREFIX Upload successful"
+      ((SUCCESS_COUNT++))
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: MySQL backup failed for $HOSTNAME in $NAMESPACE namespace with status $BACKUP_STATUS. Please check the logs for more information."
+      echo "$LOG_PREFIX WARNING: Upload failed for $HOSTNAME. Keeping local copy for recovery."
         ((FAILURE_COUNT++))
     fi
-
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 💯 Backup process completed for $HOSTNAME."
+  else
+    echo "$LOG_PREFIX ERROR: mysqldump failed for $HOSTNAME in $NAMESPACE"
+    ((FAILURE_COUNT++))
+    rm -f "$BACKUP_FILE"
+  fi
 done
+set -e  # restore strict mode
 
-# Print final counts
+# === RETENTION POLICY ===
+echo "$LOG_PREFIX Applying 7-day local retention policy..."
+find "$BACKUP_BASE" -type f -name "*.gz" -mtime +7 -delete
+echo "$LOG_PREFIX Retention cleanup complete."
+
+# === SUMMARY ===
 echo "┌─────────────────────────────────────────────────────┐"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🙆 Total Successful Backups: $SUCCESS_COUNT"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🙅 Total Failed Backups: $FAILURE_COUNT"
+echo "$LOG_PREFIX Total Successful Backups: $SUCCESS_COUNT"
+echo "$LOG_PREFIX Total Failed Backups: $FAILURE_COUNT"
 echo "└─────────────────────────────────────────────────────┘"
-
-# Upload log files to IBM Cloud Object Storage
-ibmcloud cos upload --bucket $BUCKET_NAME --key ${DBTYPE}_backup_$(date +%F).log --file /logs/${DBTYPE}/${DBTYPE}_backup_$(date +%F).log --output text --region eu-geo
-UPLOAD_STATUS=$?
-if [ $UPLOAD_STATUS -eq 0 ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 📝 Logs uploaded to IBM Cloud Object Storage successfully."
-else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Error: Failed to upload log file to IBM Cloud Object Storage. Status code: $UPLOAD_STATUS. Error message: $(ibmcloud cos upload --bucket $BUCKET_NAME --key ${DBTYPE}_backup_$(date +%F).log --file /logs/${DBTYPE}/${DBTYPE}_backup_$(date +%F).log --output text --region eu-geo)"
-fi
-
-# Cleanup
-rm -rf /backups/${DBTYPE}/* 2>/dev/null
-rm -rf /logs/${DBTYPE}/* 2>/dev/null

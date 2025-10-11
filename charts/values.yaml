@@ -1,58 +1,93 @@
+# Default values for kubernetes-database-backup.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+# For more information on using Helm, visit https://helm.sh/docs/intro/using_helm/
+
+# @param fullnameOverride String to fully override common.names.fullname template
 fullnameOverride: ""
 
+# S3 configuration
+# @param s3.endpoint: S3 endpoint URL
+# @param s3.accessKey: S3 access key
+# @param s3.secretKey: S3 secret key
 s3:
   endpoint: ""
   accessKey: ""
   secretKey: ""
 
+# MongoDB configurations
+# @param mongodb.enabled: Enable or disable backup for the MongoDB database
+# @param mongodb.schedule: Cron schedule for backups
+# @param mongodb.bucketName: S3 bucket name
+# @param mongodb.instances: List of MongoDB instances to back up. Required fields: hostname, namespace. Optional fields: port
 mongodb:
   enabled: false
   schedule: ""
   bucketName: ""
-  bucketRegion: ""
   instances: []
+  # E.g.
   # instances:
   #   - hostname: mongodb-1
   #     namespace: namespace-1
   #     port: 27017
 
+# PostgreSQL configurations
+# @param postgresql.enabled: Enable or disable backup for the PostgreSQL database
+# @param postgresql.schedule: Cron schedule for backups
+# @param postgresql.bucketName: S3 bucket name
+# @param postgresql.instances: List of PostgreSQL instances to back up. Required fields: hostname, namespace, database. Optional fields: port.
 postgresql:
   enabled: false
   schedule: ""
   bucketName: ""
-  bucketRegion: ""
   instances: []
+  # E.g.
   # instances:
-  #   - name: postgresql-1
+  #   - hostname: postgresql-1
   #     namespace: ns-1
+  #     database: db-1
+  #     port: 5432
 
+# MySQL configurations
+# @param mysql.enabled: Enable or disable backup for the MySQL database
+# @param mysql.schedule: Cron schedule for backups
+# @param mysql.bucketName: S3 bucket name
+# @param mysql.instances: List of MySQL instances to back up. Required fields: hostname, namespace, database. Optional fields: port.
 mysql:
   enabled: false
   schedule: ""
   bucketName: ""
-  bucketRegion: ""
   instances: []
+  # E.g.
+  # instances:
+  #   - hostname: mysql-1
+  #     namespace: ns-1
+  #     database: db-1
+  #     port: 3306
 
-mariadb:
-  enabled: false
-  schedule: ""
-  bucketName: ""
-  bucketRegion: ""
-  instances: []
-
+# Milvus configurations
+# @param milvus.enabled: Enable or disable backup for the Milvus database
+# @param milvus.schedule: Cron schedule for backups
+# @param milvus.bucketName: S3 bucket name
+# @param milvus.instances: List of Milvus instances to back up. Required fields: hostname, namespace. Optional fields: port.
 milvus:
   enabled: false
   schedule: ""
   bucketName: ""
-  bucketRegion: ""
   instances: []
 
 # Persistence configuration
+# @param persistence.storageClass: Storage class for the Persistent Volume Claim
+# @param persistence.size: Size of the Persistent Volume Claim
 persistence:
   storageClass: ""
   size: ""
 
 # Service Account configuration
+# @param serviceAccount.create: Whether to create a Service Account
+# @param serviceAccount.automount: Whether to automount the Service Account token
+# @param serviceAccount.annotations: Annotations to add to the Service Account
+# @param serviceAccount.name: Name of the Service Account (if not creating a new one
 serviceAccount:
   create: true
   automount: true
@@ -60,11 +95,17 @@ serviceAccount:
   name: ""
 
 # RBAC configuration
+# @param rbac.create: Whether to create RBAC resources
+# @param rbac.clusterRole: Whether to create a ClusterRole (true) or Role
 rbac:
   create: true
   clusterRole: true
 
 # Image configuration
+# @param image.repository: Container image repository
+# @param image.tag: Container image tag
+# @param image.pullPolicy: Image pull policy
+# @param image.pullSecrets: Image pull secrets
 image:
   repository: "ghcr.io/debjotimallick/kubernetes-database-backup"
   tag: "latest"
@@ -72,6 +113,9 @@ image:
   pullSecrets: []
 
 # Job configuration
+# @param job.concurrencyPolicy: Concurrency policy for the CronJob
+# @param job.successfulJobsHistoryLimit: Number of successful job histories to keep
+# @param job.failedJobsHistoryLimit: Number of failed job histories to keep
 concurrencyPolicy: Forbid
 successfulJobsHistoryLimit: 3
 failedJobsHistoryLimit: 1

@@ -55,7 +55,7 @@ for db in "${db_array[@]}"; do
 
   # === GET CREDENTIALS ===
   USER=$(kubectl exec -n "$NAMESPACE" svc/"$HOSTNAME" -- printenv MONGODB_ROOT_USER 2>/dev/null || echo "root")
-  PASSWORD=$(kubectl exec -n "$NAMESPACE" svc/"$HOSTNAME" -- sh -c 'if [ -n "$MONGODB_ROOT_PASSWORD" ]; then echo "$MONGODB_ROOT_PASSWORD"; elif [ -n "$MONGODB_ROOT_PASSWORD_FILE" ]; then cat "$MONGODB_ROOT_PASSWORD_FILE"; fi' 2>/dev/null || true)
+  PASSWORD=$(kubectl get secret -n $NAMESPACE ${HOSTNAME} -o jsonpath="{.data.mongodb-root-password}" 2>/dev/null | base64 -d)
 
   if [[ -z "$PASSWORD" ]]; then
     echo "$LOG_PREFIX ERROR: Missing MongoDB credentials for $HOSTNAME in $NAMESPACE"

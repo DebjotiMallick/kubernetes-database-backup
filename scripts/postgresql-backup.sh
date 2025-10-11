@@ -56,7 +56,7 @@ for db in "${db_array[@]}"; do
 
   # === GET CREDENTIALS ===
   USER=$(kubectl exec -n "$NAMESPACE" svc/"$HOSTNAME" -- printenv POSTGRES_USER 2>/dev/null || echo "postgres")
-  PASSWORD=$(kubectl exec -n "$NAMESPACE" svc/"$HOSTNAME" -- sh -c 'if [ -n "$POSTGRES_PASSWORD" ]; then echo "$POSTGRES_PASSWORD"; elif [ -n "$POSTGRES_PASSWORD_FILE" ]; then cat "$POSTGRES_PASSWORD_FILE"; fi' 2>/dev/null || true)
+  PASSWORD=$(kubectl get secret -n $NAMESPACE ${HOSTNAME} -o jsonpath="{.data.postgres-password}" 2>/dev/null | base64 -d)
 
   if [[ -z "$PASSWORD" ]]; then
     echo "$LOG_PREFIX ERROR: Missing PostgreSQL credentials for $HOSTNAME in $NAMESPACE"
