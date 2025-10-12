@@ -1,0 +1,46 @@
+name: Release Helm Chart
+
+on:
+    push:
+        paths:
+            - "charts/**"
+
+permissions:
+    contents: write
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Helm
+              uses: azure/setup-helm@v4
+              with:
+                  version: v3.15.2
+
+            - name: Configure Git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            - name: Package Helm chart
+              run: |
+                  CHART_DIR=charts/
+                  mkdir -p packaged
+                  helm package $CHART_DIR -d packaged
+
+            - name: Publish to GitHub Pages
+              run: |
+                  mkdir -p docs
+                  helm repo index docs --url https://charts.debjotimallick.store --merge docs/index.yaml || true
+                  mv packaged/*.tgz docs/
+                  git add docs/
+                  git commit -m "Release new chart version" || echo "No changes to commit"
+                  git push origin main
+
+            - name: Upload to Artifact Hub
+              run: |
+                  echo "Artifact Hub will automatically detect the new chart via index.yaml update"
