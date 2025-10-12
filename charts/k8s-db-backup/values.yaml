@@ -111,6 +111,9 @@ image:
   tag: "v0.0.2"
   pullPolicy: IfNotPresent
   pullSecrets: []
+  # E.g.
+  # pullSecrets:
+  #   - name: my-registry-secret
 
 # Job configuration
 # @param job.concurrencyPolicy: Concurrency policy for the CronJob
