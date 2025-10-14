@@ -17,22 +17,35 @@ jobs:
     env:
       BUCKET_NAME: helm-charts
       BUCKET_URL: https://charts.debjotimallick.store
+      R2_ENDPOINT: https://057e3102b2c1158fd70cf80f2284023f.r2.cloudflarestorage.com
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: v3.15.2
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y awscli
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+      - name: Configure AWS CLI for Cloudflare R2
+        run: |
+          mkdir -p ~/.aws
+          cat <<EOF > ~/.aws/credentials
+          [default]
+          aws_access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws_secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          EOF
+
+          cat <<EOF > ~/.aws/config
+          [default]
+          region = auto
+          output = json
+          s3 =
+              endpoint_url = ${{ env.R2_ENDPOINT }}
+              addressing_style = virtual
+          EOF
 
       - name: Package Helm chart
         run: |
@@ -44,8 +57,7 @@ jobs:
 
       - name: Download existing index.yaml from S3 (if exists)
         run: |
-          mkdir -p ./dist
-          aws s3 cp s3://$BUCKET_NAME/index.yaml ./dist/index.yaml || echo "No existing index found, creating new one"
+          aws s3 --endpoint-url $R2_ENDPOINT cp s3://$BUCKET_NAME/index.yaml ./dist/index.yaml || echo "No existing index found"
 
       - name: Merge Helm repo index
         run: |
@@ -58,8 +70,12 @@ jobs:
 
       - name: Upload updated charts and index.yaml to S3
         run: |
-          aws s3 cp . s3://$BUCKET_NAME/ --recursive --exclude "*" --include "*.tgz" --include "index.yaml"
+          aws s3 --endpoint-url $R2_ENDPOINT cp . s3://$BUCKET_NAME/ \
+            --recursive \
+            --exclude "*" \
+            --include "*.tgz" \
+            --include "index.yaml"
 
       - name: Verify upload
         run: |
-          aws s3 ls s3://$BUCKET_NAME/
+          aws s3 --endpoint-url $R2_ENDPOINT ls s3://$BUCKET_NAME/
