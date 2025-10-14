@@ -1,0 +1,65 @@
+name: Release Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "charts/**"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    env:
+      BUCKET_NAME: helm-charts
+      BUCKET_URL: https://charts.debjotimallick.store
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+
+      - name: Package Helm chart
+        run: |
+          cd charts/
+          helm package . -d ../../dist
+          cd ../../dist
+          echo "Packaged chart files:"
+          ls -l
+
+      - name: Download existing index.yaml from S3 (if exists)
+        run: |
+          mkdir -p ./dist
+          aws s3 cp s3://$BUCKET_NAME/index.yaml ./dist/index.yaml || echo "No existing index found, creating new one"
+
+      - name: Merge Helm repo index
+        run: |
+          cd dist
+          if [ -f index.yaml ]; then
+            helm repo index . --merge index.yaml --url $BUCKET_URL
+          else
+            helm repo index . --url $BUCKET_URL
+          fi
+
+      - name: Upload updated charts and index.yaml to S3
+        run: |
+          aws s3 cp . s3://$BUCKET_NAME/ --recursive --exclude "*" --include "*.tgz" --include "index.yaml"
+
+      - name: Verify upload
+        run: |
+          aws s3 ls s3://$BUCKET_NAME/
