@@ -49,8 +49,8 @@ jobs:
       - name: Package Helm chart
         run: |
           cd charts/
-          helm package . -d ../../dist
-          cd ../../dist
+          helm package . -d ../dist
+          cd ../dist
           echo "Packaged chart files:"
           ls -l
 
@@ -61,6 +61,7 @@ jobs:
       - name: Merge Helm repo index
         run: |
           cd dist
+          ls -lh
           if [ -f index.yaml ]; then
             helm repo index . --merge index.yaml --url $BUCKET_URL
           else
@@ -69,7 +70,7 @@ jobs:
 
       - name: Upload updated charts and index.yaml to S3
         run: |
-          aws s3 --endpoint-url $R2_ENDPOINT cp . s3://$BUCKET_NAME/ \
+          aws s3 --endpoint-url $R2_ENDPOINT cp dist/ s3://$BUCKET_NAME/ \
             --recursive \
             --exclude "*" \
             --include "*.tgz" \
