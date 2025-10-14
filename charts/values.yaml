@@ -76,7 +76,7 @@ milvus:
   bucketName: ""
   instances: []
 
-# Persistence storage configuration
+# Persistence configuration
 # @param persistence.storageClass: Storage class for the Persistent Volume Claim
 # @param persistence.size: Size of the Persistent Volume Claim
 persistence:
