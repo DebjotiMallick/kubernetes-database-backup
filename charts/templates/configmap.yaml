@@ -15,8 +15,11 @@ data:
       {{- if hasKey $instance "port" }}
       port: {{ $instance.port }}
       {{- end }}
-      {{- if hasKey $instance "database" }}
-      database: {{ $instance.database }}
+      {{- if hasKey $instance "databases" }}
+      databases:
+      {{- range $db := $instance.databases }}
+        - {{ $db }}
+      {{- end }}
       {{- end }}
     {{- end }}
   {{- end }}

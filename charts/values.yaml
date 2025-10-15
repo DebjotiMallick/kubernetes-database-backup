@@ -35,7 +35,8 @@ mongodb:
 # @param postgresql.enabled: Enable or disable backup for the PostgreSQL database
 # @param postgresql.schedule: Cron schedule for backups
 # @param postgresql.bucketName: S3 bucket name
-# @param postgresql.instances: List of PostgreSQL instances to back up. Required fields: hostname, namespace, database. Optional fields: port.
+# @param postgresql.instances: List of PostgreSQL instances to back up. Required fields: hostname, namespace, databases. Optional fields: port.
+# Databases should be an array of database names. E.g. databases: ["db-1", "db-2"]. For single database, use databases: ["db-1"]. For cluster backup, use databases: ["*"].
 postgresql:
   enabled: false
   schedule: ""
@@ -43,16 +44,21 @@ postgresql:
   instances: []
   # E.g.
   # instances:
-  #   - hostname: postgresql-1
+  #   - hostname: postgresql-standalone
   #     namespace: ns-1
-  #     database: db-1
+  #     databases: ["db-1", "db-2"]
   #     port: 5432
+  #  - hostname: postgresql-cluster
+  #    namespace: ns-1
+  #    databases: ["*"]
+  #    port: 5432
 
 # MySQL configurations
 # @param mysql.enabled: Enable or disable backup for the MySQL database
 # @param mysql.schedule: Cron schedule for backups
 # @param mysql.bucketName: S3 bucket name
-# @param mysql.instances: List of MySQL instances to back up. Required fields: hostname, namespace, database. Optional fields: port.
+# @param mysql.instances: List of MySQL instances to back up. Required fields: hostname, namespace, databases. Optional fields: port.
+# Databases should be an array of database names. E.g. databases: ["db-1", "db-2"]. For single database, use databases: ["db-1"]. For cluster backup, use databases: ["*"].
 mysql:
   enabled: false
   schedule: ""
@@ -60,9 +66,13 @@ mysql:
   instances: []
   # E.g.
   # instances:
-  #   - hostname: mysql-1
+  #   - hostname: mysql-standalone
   #     namespace: ns-1
-  #     database: db-1
+  #     databases: ["db-1", "db-2"]
+  #     port: 3306
+  #   - hostname: mysql-cluster
+  #     namespace: ns-1
+  #     databases: ["*"]
   #     port: 3306
 
 # Persistence configuration
@@ -97,7 +107,7 @@ rbac:
 # @param image.pullSecrets: Image pull secrets
 image:
   repository: "ghcr.io/debjotimallick/kubernetes-database-backup"
-  tag: "v0.0.3"
+  tag: "v0.0.4"
   pullPolicy: IfNotPresent
   pullSecrets: []
   # E.g.
