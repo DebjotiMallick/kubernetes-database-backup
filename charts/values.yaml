@@ -107,7 +107,7 @@ rbac:
 # @param image.pullSecrets: Image pull secrets
 image:
   repository: "ghcr.io/debjotimallick/kubernetes-database-backup"
-  tag: "v0.0.4"
+  tag: "v0.0.5"
   pullPolicy: IfNotPresent
   pullSecrets: []
   # E.g.
