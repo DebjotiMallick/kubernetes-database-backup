@@ -80,7 +80,7 @@ mysql:
 # @param persistence.size: Size of the Persistent Volume Claim
 persistence:
   storageClass: ""
-  size: ""
+  size: "10Gi"
 
 # Service Account configuration
 # @param serviceAccount.create: Whether to create a Service Account
