@@ -65,17 +65,6 @@ mysql:
   #     database: db-1
   #     port: 3306
 
-# Milvus configurations
-# @param milvus.enabled: Enable or disable backup for the Milvus database
-# @param milvus.schedule: Cron schedule for backups
-# @param milvus.bucketName: S3 bucket name
-# @param milvus.instances: List of Milvus instances to back up. Required fields: hostname, namespace. Optional fields: port.
-milvus:
-  enabled: false
-  schedule: ""
-  bucketName: ""
-  instances: []
-
 # Persistence configuration
 # @param persistence.storageClass: Storage class for the Persistent Volume Claim
 # @param persistence.size: Size of the Persistent Volume Claim
