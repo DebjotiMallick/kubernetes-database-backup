@@ -33,11 +33,3 @@ RUN install -d /usr/share/postgresql-common/pgdg \
 RUN wget https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2404-x86_64-100.11.0.deb \
     && apt-get install -y ./mongodb-database-tools-ubuntu2404-x86_64-100.11.0.deb \
     && rm -f mongodb-database-tools-ubuntu2404-x86_64-100.11.0.deb
-
-# Install milvus backup client
-RUN wget -qO- https://github.com/zilliztech/milvus-backup/releases/download/v0.5.2/milvus-backup_Linux_x86_64.tar.gz | tar -xz -C /usr/local/bin
-
-# Install mc client
-RUN curl https://dl.min.io/client/mc/release/linux-amd64/mc --create-dirs -o /usr/local/bin/minio-binaries/mc \
-    && chmod +x /usr/local/bin/minio-binaries/mc
-ENV PATH="$PATH:/usr/local/bin/minio-binaries/"

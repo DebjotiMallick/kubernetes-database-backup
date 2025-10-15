@@ -1,76 +1,35 @@
-# Automated Database Backup System
+<h1 align="center" id="title">Kubernetes Database Backup</h1>
 
-Automation Database Backup Engine, which takes periodical database dump and push it to COS repository buckets
+<p align="center"><img src="https://socialify.git.ci/DebjotiMallick/kubernetes-database-backup/image?description=1&language=1&name=1&owner=1&theme=Light" alt="project-image"></p>
 
-## Releases:
-| Version | Features                                                                                                                  |
-| ------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 3.3.2   | Updated mc client                                                                                                         |
-| 3.3.1   | Updated kubectl version to latest (1.32)                                                                                  |
-| 3.3     | Major updates include ubuntu 24.04 base image, postgresql-client 16, milvus backup 0.5.2, COS update strategy change etc. |
-| 3.2     | Added telnet, ssh, netstat, ping commands                                                                                 |
-| 3.1     | Added UAT milvus certificate                                                                                              |
-| 3.0     | Minor fix                                                                                                                 |
-| 2.9     | Added IBM Root CA certificate                                                                                             |
-| 2.8     | Added MinIO client                                                                                                        |
-| 2.7     | Added milvus backup tool                                                                                                  |
-| 2.6     | Added bc & sendgrid for cert-renewal script                                                                               |
-| 2.5     | Added weaviate-ts-client                                                                                                  |
-| 2.4     | Updated nodejs version to 20.x                                                                                            |
-| 2.3     | Added postgresql client version 15 and oc client                                                                          |
-| 2.2     | Updated mongodb org tools                                                                                                 |
+<p id="description">A simple reliable database backup solution for Kubernetes and OpenShift.</p>
 
-# Database Backup System
+## Introduction
 
-## Overview
-This system automates the backup of multiple databases and stores them securely in designated object storage buckets. The backups are categorized based on the database type and environment (Dev, UAT, Prod).
+This Helm chart deploys a Kubernetes-native solution for backing up databases such as PostgreSQL, MySQL, and MongoDB to S3-compatible storage. It leverages Kubernetes CronJobs to schedule regular backups and stores them in a specified S3 bucket. 
 
-## Backup Storage Mapping
-| Database   | Dev Backup Bucket         | UAT Backup Bucket         | Prod Backup Bucket         |
-| ---------- | ------------------------- | ------------------------- | -------------------------- |
-| MongoDB    | `roks-dev-mongodbbackup`  | `roks-uat-mongodbbackup`  | `roks-prod-mongodbbackup`  |
-| PostgreSQL | `roks-dev-postgresbackup` | `roks-uat-postgresbackup` | `roks-prod-postgresbackup` |
-| MySQL      | `roks-dev-mysqlbackup`    | `roks-uat-mysqlbackup`    | `roks-prod-mysqlbackup`    |
-| Milvus     | `roks-dev-milvusbackup`   | `roks-uat-milvusbackup`   | `roks-prod-milvusbackup`   |
-| MariaDB    | `roks-dev-mariadbbackup`  | `roks-uat-mariadbbackup`  | `roks-prod-mariadbbackup`  |
+## Prerequisites
+- Kubernetes 1.23+
+- Helm 3.8+ 
+- PV provisioner support in the underlying infrastructure
+- S3-compatible storage account (AWS S3, Cloudflare R2, MinIO, etc.)
 
 ## Features
-- Automated scheduled backups
-- Secure storage in environment-specific object storage buckets
-- Supports multiple database types (MongoDB, PostgreSQL, MySQL, Milvus, MariaDB)
-- Configurable retention policies
-- Logs and monitoring for backup verification
+- Supports PostgreSQL, MySQL, and MongoDB databases.
+- Configurable backup schedules using Cron expressions.
+- Stores backups in S3-compatible storage.
+- Easy to configure and deploy using Helm.
+- Supports multiple database instances and databases per instance.
+- Retention policy for old backups.
 
-## Backup Process
-1. The backup system connects to each database instance and performs a dump/export.
-2. The backup file is compressed and stored securely.
-3. The file is uploaded to the designated bucket for the corresponding environment.
-4. The system logs the backup details and verifies integrity.
+## Installation
+```sh
+helm repo add debjoti https://charts.debjotimallick.store/
+helm install my-backups -f values.yaml debjoti/k8s-db-backup
+```
 
-## Setup and Configuration
-1. **Database Credentials:** Ensure database connection details are set in environment variables or a secure configuration file.
-2. **Object Storage Access:** Ensure proper IAM roles or API keys are configured for uploading backups.
-3. **Scheduling:** Use a cron job or Kubernetes CronJob to trigger backups at the desired frequency.
+For detailed installation instructions, refer to the [Installation Guide](https://github.com/DebjotiMallick/kubernetes-database-backup/blob/main/charts/README.md)
 
-## Monitoring and Logs
-- Backup logs are stored in `/var/logs/db-backups.log`
-- Cloud storage logs can be monitored to verify uploads
-- Alerts can be configured for failed backups using monitoring tools
+Artifacts are stored in Artifact Hub: https://artifacthub.io/packages/helm/debjoti-mallick/k8s-db-backup
 
-## Restore Process
-1. Download the required backup from the storage bucket.
-2. Extract and restore using the appropriate database restore command:
-   - **MongoDB:** `mongorestore -u root -p <password> --authenticationDatabase admin --gzip --archive=backup.gz`
-   - **PostgreSQL:** `gzip -dk backup_file.gz | psql -U postgres -f backup_file`
-   - **MySQL:** `gzip -dk backup_file.gz | mysql -u root -p<password> < backup_file`
-   - **Milvus:** Use Milvus restore APIs
-   - **MariaDB:** `gzip -dk backup_file.gz | mysql -u root -p<password> < backup_file`
-
-## Future Enhancements
-- Incremental backups for better efficiency
-- Integration with a centralized backup management dashboard
-- Automated restore testing for backup integrity verification
-
----
-**Maintained by:** SRE Team
-
+Give a star if you find this project useful! ⭐
