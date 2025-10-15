@@ -48,11 +48,21 @@ set +e  # allow loop to continue on failure
 for db in "${db_array[@]}"; do
   HOSTNAME=$(echo "$db" | jq -r '.hostname')
   NAMESPACE=$(echo "$db" | jq -r '.namespace')
-  DATABASE=$(echo "$db" | jq -r '.database // "postgres"')
+  DATABASES=$(echo "$db" | jq -r '.databases')
   PORT=$(echo "$db" | jq -r '.port // 5432')
 
+  # === VALIDATE PARAMETERS ===
+  required_parameters=("$HOSTNAME" "$NAMESPACE" "$DATABASES")
+  for param in "${required_parameters[@]}"; do
+    if [ -z "$param" ] || [ "$param" == "null" ]; then
+      echo "$LOG_PREFIX ERROR: Missing required parameter in config: $param"
+      ((FAILURE_COUNT++))
+      continue 
+    fi
+  done
+
   echo "===================================================================="
-  echo "$LOG_PREFIX Processing PostgreSQL instance: $HOSTNAME (namespace: $NAMESPACE, db: $DATABASE)"
+  echo "$LOG_PREFIX Processing PostgreSQL instance: $HOSTNAME (namespace: $NAMESPACE)"
 
   # === GET CREDENTIALS ===
   USER=$(kubectl exec -n "$NAMESPACE" svc/"$HOSTNAME" -- printenv POSTGRES_USER 2>/dev/null || echo "postgres")
@@ -61,49 +71,90 @@ for db in "${db_array[@]}"; do
   if [[ -z "$PASSWORD" ]]; then
     echo "$LOG_PREFIX ERROR: Missing PostgreSQL credentials for $HOSTNAME in $NAMESPACE"
     ((FAILURE_COUNT++))
-    continue
+    continue 
   fi
 
-  # === BACKUP FILE ===
-  FILENAME="${HOSTNAME//-/_}_${NAMESPACE//-/_}_${DATABASE}_$(date +"%d_%m_%Y_%H%M%S").sql.gz"
-  BACKUP_FILE="${BACKUP_BASE}/${FILENAME}"
-  CLEANUP_ON_EXIT=true  # assume cleanup until success
+  # === Cluster Backup ===
+  if echo "$DATABASES" | grep -q '"\*"' >/dev/null 2>&1; then
+    echo "$LOG_PREFIX Detected '*' — running pg_dumpall for full cluster..."
+    FILENAME="${HOSTNAME//-/_}_${NAMESPACE//-/_}_cluster_$(date +"%d_%m_%Y_%H%M%S").sql.gz"
+    BACKUP_FILE="${BACKUP_BASE}/${FILENAME}"
+    CLEANUP_ON_EXIT=true
 
-  echo "$LOG_PREFIX Running pg_dump for $DATABASE ..."
-  START_TIME=$(date +%s)
-  PGPASSWORD="$PASSWORD" pg_dump \
-    -h "${HOSTNAME}.${NAMESPACE}" \
-    -p "$PORT" \
-    -U "$USER" \
-    -d "$DATABASE" \
-    -F p \
-    | gzip > "$BACKUP_FILE"
-  DUMP_STATUS=$?
+    START_TIME=$(date +%s)
+    PGPASSWORD="$PASSWORD" pg_dumpall \
+      -h "${HOSTNAME}.${NAMESPACE}" \
+      -p "$PORT" \
+      -U "$USER" \
+      | gzip > "$BACKUP_FILE"
+    DUMP_STATUS=$?
+    END_TIME=$(date +%s)
+    DURATION=$((END_TIME - START_TIME))
 
-  END_TIME=$(date +%s)
-  DURATION=$((END_TIME - START_TIME))
-
-  if [ $DUMP_STATUS -eq 0 ] && gunzip -t "$BACKUP_FILE" >/dev/null 2>&1; then
-    echo "$LOG_PREFIX Backup successful (duration: ${DURATION}s)"
-    CLEANUP_ON_EXIT=false  # Verified dump created, keep it
-
-    # === UPLOAD TO S3 ===
-    S3_PATH="s3://${BUCKET_NAME}/${S3_PREFIX:+$S3_PREFIX/}${FILENAME}"
-    echo "$LOG_PREFIX Uploading backup to $S3_PATH ..."
-    if aws --endpoint-url "https://${S3_ENDPOINT}" s3 cp "$BACKUP_FILE" "$S3_PATH" >/dev/null 2>&1; then
-      echo "$LOG_PREFIX Upload successful"
-      ((SUCCESS_COUNT++))
+    if [ $DUMP_STATUS -eq 0 ] && gunzip -t "$BACKUP_FILE" >/dev/null 2>&1; then
+      echo "$LOG_PREFIX Cluster backup successful (duration: ${DURATION}s)"
+      CLEANUP_ON_EXIT=false
+      S3_PATH="s3://${BUCKET_NAME}/${FILENAME}"
+      echo "$LOG_PREFIX Uploading cluster backup to $S3_PATH ..."
+      if aws --endpoint-url "https://${S3_ENDPOINT}" s3 cp "$BACKUP_FILE" "$S3_PATH" >/dev/null 2>&1; then
+        echo "$LOG_PREFIX Upload successful"
+        ((SUCCESS_COUNT++))
+      else
+        echo "$LOG_PREFIX WARNING: Upload failed for $HOSTNAME cluster. Keeping local copy."
+        ((FAILURE_COUNT++))
+      fi
     else
-      echo "$LOG_PREFIX WARNING: Upload failed for $HOSTNAME. Keeping local copy for recovery."
+      echo "$LOG_PREFIX ERROR: pg_dumpall failed for $HOSTNAME.$NAMESPACE"
       ((FAILURE_COUNT++))
+      rm -f "$BACKUP_FILE"
     fi
+
+  # === Individual Database Backups ===
   else
-    echo "$LOG_PREFIX ERROR: pg_dump failed for $HOSTNAME in $NAMESPACE"
-    ((FAILURE_COUNT++))
-    rm -f "$BACKUP_FILE"
+    mapfile -t DB_LIST < <(echo "$DATABASES" | jq -r '.[]')
+    for DATABASE in "${DB_LIST[@]}"; do
+      if [ -z "$DATABASE" ] || [ "$DATABASE" == "null" ]; then
+        continue
+      fi
+
+      echo "$LOG_PREFIX Running pg_dump for database: $DATABASE ..."
+      FILENAME="${HOSTNAME//-/_}_${NAMESPACE//-/_}_${DATABASE}_$(date +"%d_%m_%Y_%H%M%S").sql.gz"
+      BACKUP_FILE="${BACKUP_BASE}/${FILENAME}"
+      CLEANUP_ON_EXIT=true
+
+      START_TIME=$(date +%s)
+      PGPASSWORD="$PASSWORD" pg_dump \
+        -h "${HOSTNAME}.${NAMESPACE}" \
+        -p "$PORT" \
+        -U "$USER" \
+        -d "$DATABASE" \
+        -F p \
+        | gzip > "$BACKUP_FILE"
+      DUMP_STATUS=$?
+      END_TIME=$(date +%s)
+      DURATION=$((END_TIME - START_TIME))
+
+      if [ $DUMP_STATUS -eq 0 ] && gunzip -t "$BACKUP_FILE" >/dev/null 2>&1; then
+        echo "$LOG_PREFIX Backup successful for $DATABASE (duration: ${DURATION}s)"
+        CLEANUP_ON_EXIT=false
+        S3_PATH="s3://${BUCKET_NAME}/${FILENAME}"
+        echo "$LOG_PREFIX Uploading $DATABASE backup to $S3_PATH ..."
+        if aws --endpoint-url "https://${S3_ENDPOINT}" s3 cp "$BACKUP_FILE" "$S3_PATH" >/dev/null 2>&1; then
+          echo "$LOG_PREFIX Upload successful"
+          ((SUCCESS_COUNT++))
+        else
+          echo "$LOG_PREFIX WARNING: Upload failed for $DATABASE in $HOSTNAME. Keeping local copy."
+          ((FAILURE_COUNT++))
+        fi
+      else
+        echo "$LOG_PREFIX ERROR: pg_dump failed for $DATABASE in $HOSTNAME"
+        ((FAILURE_COUNT++))
+        rm -f "$BACKUP_FILE"
+      fi
+    done
   fi
 done
-set -e  # restore strict mode
+set -e
 
 # === RETENTION POLICY ===
 echo "$LOG_PREFIX Applying 7-day local retention policy..."
