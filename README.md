@@ -8,6 +8,9 @@
 
 This Helm chart deploys a Kubernetes-native solution for backing up databases such as PostgreSQL, MySQL, and MongoDB to S3-compatible storage. It leverages Kubernetes CronJobs to schedule regular backups and stores them in a specified S3 bucket. 
 
+## Architecture
+![Architecture Diagram](https://raw.githubusercontent.com/DebjotiMallick/kubernetes-database-backup/main/docs/architecture.png)
+
 ## Prerequisites
 - Kubernetes 1.23+
 - Helm 3.8+ 
